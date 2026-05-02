@@ -4,18 +4,21 @@ type ProfileRow = {
   id: string;
   full_name: string;
   phone: string | null;
+  role: "admin" | "worker";
   created_at: string;
 };
 type ProfileInsert = {
   id: string;
   full_name: string;
   phone?: string | null;
+  role?: "admin" | "worker";
   created_at?: string;
 };
 type ProfileUpdate = {
   id?: string;
   full_name?: string;
   phone?: string | null;
+  role?: "admin" | "worker";
   created_at?: string;
 };
 

@@ -4,7 +4,7 @@ import { useSupabase } from "@/components/SupabaseProvider";
 import { AuthGuard } from "@/components/AuthGuard";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Plus, FileText, LogOut, Wrench } from "lucide-react";
+import { Plus, FileText, LogOut, Wrench, Shield } from "lucide-react";
 import type { Database } from "@/lib/supabase/types";
 
 type WorkOrder = Database["public"]["Tables"]["work_orders"]["Row"];
@@ -14,6 +14,7 @@ export default function DashboardPage() {
   const supabase = useSupabase();
   const [orders, setOrders] = useState<WorkOrder[]>([]);
   const [userName, setUserName] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then((response) => {
@@ -22,6 +23,14 @@ export default function DashboardPage() {
         setUserName(user.user_metadata?.full_name || user.email || "");
       }
     });
+
+    supabase
+      .from("profiles")
+      .select("role")
+      .single()
+      .then(({ data }) => {
+        if (data?.role === "admin") setIsAdmin(true);
+      });
 
     supabase
       .from("work_orders")
@@ -59,6 +68,15 @@ export default function DashboardPage() {
               <h1 className="text-lg font-bold text-gray-900">Plomería</h1>
             </div>
             <div className="flex items-center gap-3">
+              {isAdmin && (
+                <button
+                  onClick={() => router.push("/admin")}
+                  className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-blue-700"
+                >
+                  <Shield size={16} />
+                  Panel Admin
+                </button>
+              )}
               <span className="text-sm text-gray-500">{userName}</span>
               <button
                 onClick={handleLogout}
