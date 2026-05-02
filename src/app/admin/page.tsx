@@ -4,7 +4,8 @@ import { AuthGuard } from "@/components/AuthGuard";
 import { useSupabase } from "@/components/SupabaseProvider";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Eye, LayoutDashboard, LogOut, Shield, Wrench } from "lucide-react";
+import { Download, Eye, LayoutDashboard, LogOut, Shield, Wrench } from "lucide-react";
+import { generateWorkOrderExcel } from "@/lib/export-excel";
 
 interface AdminWorkOrder {
   id: string;
@@ -20,6 +21,7 @@ export default function AdminPage() {
   const [orders, setOrders] = useState<AdminWorkOrder[]>([]);
   const [userName, setUserName] = useState("");
   const [loading, setLoading] = useState(true);
+  const [exportingId, setExportingId] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -39,6 +41,34 @@ export default function AdminPage() {
     }
     load();
   }, [supabase]);
+
+  async function handleExport(id: string) {
+    setExportingId(id);
+    try {
+      const { data: order } = await supabase
+        .from("work_orders")
+        .select("*")
+        .eq("id", id)
+        .single();
+
+      if (!order) throw new Error("Orden no encontrada");
+
+      const { data: items } = await supabase
+        .from("work_order_labor_items")
+        .select("description, unit, quantity, unit_price, total")
+        .eq("work_order_id", id);
+
+      const blob = await generateWorkOrderExcel(order, items || []);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Planilla_${order.sheet_number || order.id.slice(0, 8)}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExportingId(null);
+    }
+  }
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -152,15 +182,23 @@ export default function AdminPage() {
                             {statusLabels[order.status] || order.status}
                           </span>
                         </td>
-                        <td className="px-5 py-4 text-right">
+                        <td className="whitespace-nowrap px-5 py-4 text-right">
                           <button
                             onClick={() =>
                               router.push(`/work-orders/${order.id}`)
                             }
-                            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700"
                           >
                             <Eye size={14} />
-                            Ver Orden
+                            Ver
+                          </button>
+                          <button
+                            onClick={() => handleExport(order.id)}
+                            disabled={exportingId === order.id}
+                            className="ml-2 inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-green-700 disabled:opacity-50"
+                          >
+                            <Download size={14} />
+                            {exportingId === order.id ? "..." : "Excel"}
                           </button>
                         </td>
                       </tr>
@@ -192,15 +230,23 @@ export default function AdminPage() {
                     <p className="mt-1 line-clamp-2 text-sm text-gray-500">
                       {order.description}
                     </p>
-                    <div className="mt-3">
+                    <div className="mt-3 flex gap-2">
                       <button
                         onClick={() =>
                           router.push(`/work-orders/${order.id}`)
                         }
-                        className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
+                        className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
                       >
                         <Eye size={14} />
-                        Ver Orden
+                        Ver
+                      </button>
+                      <button
+                        onClick={() => handleExport(order.id)}
+                        disabled={exportingId === order.id}
+                        className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-green-700 disabled:opacity-50"
+                      >
+                        <Download size={14} />
+                        {exportingId === order.id ? "..." : "Excel"}
                       </button>
                     </div>
                   </div>

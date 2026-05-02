@@ -10,6 +10,7 @@ declare module "lucide-react" {
   export const Building2: Icon;
   export const Calendar: Icon;
   export const Camera: Icon;
+  export const Download: Icon;
   export const Eye: Icon;
   export const FileText: Icon;
   export const Hammer: Icon;
