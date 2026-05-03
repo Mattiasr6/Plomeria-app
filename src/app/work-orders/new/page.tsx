@@ -2,13 +2,13 @@
 
 import { AuthGuard } from "@/components/AuthGuard";
 import { PhotoUpload } from "@/components/PhotoUpload";
+import { ItemsSection } from "@/components/ItemsSection";
 import { useSupabase } from "@/components/SupabaseProvider";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { revalidateAll } from "@/lib/actions/revalidate";
 import {
   ArrowLeft,
-  Plus,
-  Trash2,
   Save,
   Loader2,
   Wrench,
@@ -38,19 +38,30 @@ interface Photo {
   url?: string;
 }
 
+const defaultLaborItem: LaborItem = {
+  description: "",
+  unit: "pza",
+  quantity: null,
+  unit_price: null,
+};
+
+const defaultMaterialItem: MaterialItem = {
+  description: "",
+  unit: "pza",
+  quantity: null,
+  unit_price: null,
+};
+
 export default function NewWorkOrderPage() {
   const router = useRouter();
   const supabase = useSupabase();
 
   const [saving, setSaving] = useState(false);
   const [photos, setPhotos] = useState<Photo[]>([]);
-  const [laborItems, setLaborItems] = useState<LaborItem[]>([
-    { description: "", unit: "pza", quantity: null, unit_price: null },
-  ]);
+  const [laborItems, setLaborItems] = useState<LaborItem[]>([defaultLaborItem]);
   const [materialItems, setMaterialItems] = useState<MaterialItem[]>([]);
   const [error, setError] = useState("");
 
-  // Main fields
   const [location, setLocation] = useState("");
   const [sheetNumber, setSheetNumber] = useState<number | null>(null);
   const [requestedBy, setRequestedBy] = useState("");
@@ -64,7 +75,6 @@ export default function NewWorkOrderPage() {
   const [updsResponsible, setUpdsResponsible] = useState("");
   const [ramperResponsible, setRamperResponsible] = useState("");
 
-  // Calculated totals
   const totalLabor = laborItems.reduce(
     (sum, item) => sum + (item.quantity || 0) * (item.unit_price || 0),
     0
@@ -75,46 +85,28 @@ export default function NewWorkOrderPage() {
   );
   const grandTotal = totalLabor + totalMaterials;
 
-  function addLaborItem() {
-    setLaborItems([
-      ...laborItems,
-      { description: "", unit: "pza", quantity: null, unit_price: null },
-    ]);
-  }
-
-  function removeLaborItem(index: number) {
-    setLaborItems(laborItems.filter((_, i) => i !== index));
-  }
-
-  function updateLaborItem(
+  function handleLaborUpdate(
     index: number,
     field: keyof LaborItem,
     value: string | number | null
   ) {
-    const items = [...laborItems];
-    items[index] = { ...items[index], [field]: value };
-    setLaborItems(items);
+    setLaborItems((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
   }
 
-  function addMaterialItem() {
-    setMaterialItems([
-      ...materialItems,
-      { description: "", unit: "pza", quantity: null, unit_price: null },
-    ]);
-  }
-
-  function removeMaterialItem(index: number) {
-    setMaterialItems(materialItems.filter((_, i) => i !== index));
-  }
-
-  function updateMaterialItem(
+  function handleMaterialUpdate(
     index: number,
     field: keyof MaterialItem,
     value: string | number | null
   ) {
-    const items = [...materialItems];
-    items[index] = { ...items[index], [field]: value };
-    setMaterialItems(items);
+    setMaterialItems((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
   }
 
   async function uploadPhotos(): Promise<string[]> {
@@ -152,75 +144,60 @@ export default function NewWorkOrderPage() {
       } = await supabase.auth.getUser();
       if (!user) throw new Error("No autenticado");
 
-      // 1. Create work order
-      const { data: order, error: orderError } = await supabase
-        .from("work_orders")
-        .insert({
-          plumber_id: user.id,
-          sheet_number: sheetNumber,
-          location,
-          requested_by: requestedBy,
-          received_by: receivedBy,
-          request_date: requestDate || null,
-          start_date: startDate || null,
-          end_date: endDate || null,
-          remit_number: remitNumber || null,
-          description,
-          total_labor: totalLabor,
-          total_materials: totalMaterials,
-          grand_total: grandTotal,
-          observations: observations || null,
-          upds_responsible: updsResponsible || null,
-          ramper_responsible: ramperResponsible || null,
-          status: "pending",
-        })
-        .select()
-        .single();
+      const allItems = [
+        ...laborItems
+          .filter((item) => item.description.trim())
+          .map((item) => ({
+            item_type: "labor",
+            description: item.description,
+            unit: item.unit || "pza",
+            quantity: item.quantity || 0,
+            unit_price: item.unit_price || 0,
+          })),
+        ...materialItems
+          .filter((item) => item.description.trim())
+          .map((item) => ({
+            item_type: "material",
+            description: item.description,
+            unit: item.unit || "pza",
+            quantity: item.quantity || 0,
+            unit_price: item.unit_price || 0,
+          })),
+      ];
 
-      if (orderError) throw orderError;
+      const { data: orderId, error: rpcError } = await supabase.rpc(
+        "create_work_order_transaction",
+        {
+          p_plumber_id: user.id,
+          p_sheet_number: sheetNumber,
+          p_location: location,
+          p_requested_by: requestedBy || null,
+          p_received_by: receivedBy || null,
+          p_request_date: requestDate || null,
+          p_start_date: startDate || null,
+          p_end_date: endDate || null,
+          p_remit_number: remitNumber || null,
+          p_description: description,
+          p_total_labor: totalLabor,
+          p_total_materials: totalMaterials,
+          p_grand_total: grandTotal,
+          p_observations: observations || null,
+          p_upds_responsible: updsResponsible || null,
+          p_ramper_responsible: ramperResponsible || null,
+          p_status: "pending",
+          p_items: allItems,
+        }
+      );
 
-      // 2. Insert labor items
-      const validLabor = laborItems.filter((item) => item.description.trim());
-      if (validLabor.length > 0) {
-        const { error: laborError } = await supabase
-          .from("work_order_labor_items")
-          .insert(
-            validLabor.map((item) => ({
-              work_order_id: order.id,
-              description: item.description,
-              unit: item.unit || "pza",
-              quantity: item.quantity || 0,
-              unit_price: item.unit_price || 0,
-            }))
-          );
-        if (laborError) throw laborError;
-      }
+      if (rpcError) throw rpcError;
 
-      // 3. Insert material items
-      const validMaterials = materialItems.filter((item) => item.description.trim());
-      if (validMaterials.length > 0) {
-        const { error: materialError } = await supabase
-          .from("work_order_material_items")
-          .insert(
-            validMaterials.map((item) => ({
-              work_order_id: order.id,
-              description: item.description,
-              unit: item.unit || "pza",
-              quantity: item.quantity || 0,
-              unit_price: item.unit_price || 0,
-            }))
-          );
-        if (materialError) throw materialError;
-      }
-
-      // 4. Upload photos & save URLs
       if (photos.length > 0) {
         const photoUrls = await uploadPhotos();
         const { error: photoError } = await supabase
           .from("work_order_photos")
           .insert(
             photos.map((photo, i) => ({
-              work_order_id: order.id,
+              work_order_id: orderId,
               photo_type: photo.type,
               url: photoUrls[i],
             }))
@@ -228,7 +205,8 @@ export default function NewWorkOrderPage() {
         if (photoError) throw photoError;
       }
 
-      router.push(`/work-orders/${order.id}`);
+      await revalidateAll();
+      router.push(`/work-orders/${orderId}`);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Error al guardar la orden"
@@ -260,7 +238,6 @@ export default function NewWorkOrderPage() {
           onSubmit={handleSubmit}
           className="mx-auto max-w-2xl space-y-6 px-4 py-6 pb-24"
         >
-          {/* === DATOS GENERALES === */}
           <section className="rounded-2xl bg-white p-5 shadow-sm">
             <h2 className="mb-4 text-base font-semibold text-gray-900">
               Datos Generales
@@ -274,7 +251,9 @@ export default function NewWorkOrderPage() {
                   type="number"
                   value={sheetNumber ?? ""}
                   onChange={(e) =>
-                    setSheetNumber(e.target.value ? Number(e.target.value) : null)
+                    setSheetNumber(
+                      e.target.value ? Number(e.target.value) : null
+                    )
                   }
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
                   placeholder="Ej: 30"
@@ -382,7 +361,6 @@ export default function NewWorkOrderPage() {
             </div>
           </section>
 
-          {/* === FOTOS === */}
           <section className="rounded-2xl bg-white p-5 shadow-sm">
             <div className="mb-3 flex items-center gap-2">
               <Camera className="text-blue-600" size={20} />
@@ -393,257 +371,38 @@ export default function NewWorkOrderPage() {
             <PhotoUpload photos={photos} onChange={setPhotos} />
           </section>
 
-          {/* === MANO DE OBRA === */}
-          <section className="rounded-2xl bg-white p-5 shadow-sm">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Hammer className="text-blue-600" size={20} />
-                <h2 className="text-base font-semibold text-gray-900">
-                  Detalle Mano de Obra
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={addLaborItem}
-                className="flex items-center gap-1 rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-600 transition hover:bg-blue-100"
-              >
-                <Plus size={16} />
-                Agregar
-              </button>
-            </div>
+          <ItemsSection
+            title="Mano de Obra"
+            icon={Hammer}
+            items={laborItems}
+            onAdd={() =>
+              setLaborItems((prev) => [...prev, defaultLaborItem])
+            }
+            onRemove={(i) =>
+              setLaborItems((prev) => prev.filter((_, idx) => idx !== i))
+            }
+            onUpdate={handleLaborUpdate}
+            total={totalLabor}
+            emptyMessage="Agrega items de mano de obra"
+            descriptionPlaceholder="Descripción (ej: limpieza de sifón)"
+          />
 
-            {laborItems.length === 0 && (
-              <p className="text-sm text-gray-400">
-                Agrega items de mano de obra
-              </p>
-            )}
+          <ItemsSection
+            title="Materiales"
+            icon={Wrench}
+            items={materialItems}
+            onAdd={() =>
+              setMaterialItems((prev) => [...prev, defaultMaterialItem])
+            }
+            onRemove={(i) =>
+              setMaterialItems((prev) => prev.filter((_, idx) => idx !== i))
+            }
+            onUpdate={handleMaterialUpdate}
+            total={totalMaterials}
+            emptyMessage="Agrega materiales utilizados"
+            descriptionPlaceholder="Descripción del material"
+          />
 
-            <div className="space-y-3">
-              {laborItems.map((item, i) => (
-                <div key={i} className="rounded-xl border bg-gray-50 p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="text-xs font-medium text-gray-500">
-                      Item #{i + 1}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeLaborItem(i)}
-                      className="text-gray-400 hover:text-red-500"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                  <div className="space-y-2">
-                    <input
-                      type="text"
-                      value={item.description}
-                      onChange={(e) =>
-                        updateLaborItem(i, "description", e.target.value)
-                      }
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                      placeholder="Descripción (ej: limpieza de sifón)"
-                    />
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className="block text-xs text-gray-500">
-                          Unidad
-                        </label>
-                        <select
-                          value={item.unit}
-                          onChange={(e) =>
-                            updateLaborItem(i, "unit", e.target.value)
-                          }
-                          className="w-full rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                        >
-                          <option value="pza">Pza</option>
-                          <option value="m">Metro</option>
-                          <option value="hr">Hora</option>
-                          <option value="glb">Global</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500">
-                          Cantidad
-                        </label>
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={item.quantity ?? ""}
-                          onChange={(e) =>
-                            updateLaborItem(
-                              i,
-                              "quantity",
-                              e.target.value ? Number(e.target.value) : null
-                            )
-                          }
-                          className="w-full rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500">
-                          P. Unit. (Bs.)
-                        </label>
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={item.unit_price ?? ""}
-                          onChange={(e) =>
-                            updateLaborItem(
-                              i,
-                              "unit_price",
-                              e.target.value ? Number(e.target.value) : null
-                            )
-                          }
-                          className="w-full rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                        />
-                      </div>
-                    </div>
-                    <div className="text-right text-sm font-medium text-gray-700">
-                      Total: Bs.{" "}
-                      {(
-                        (item.quantity || 0) * (item.unit_price || 0)
-                      ).toFixed(2)}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-3 border-t pt-3 text-right">
-              <span className="text-sm font-semibold text-gray-900">
-                Total Mano de Obra: Bs. {totalLabor.toFixed(2)}
-              </span>
-            </div>
-          </section>
-
-          {/* === MATERIALES === */}
-          <section className="rounded-2xl bg-white p-5 shadow-sm">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Wrench className="text-blue-600" size={20} />
-                <h2 className="text-base font-semibold text-gray-900">
-                  Detalle Materiales
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={addMaterialItem}
-                className="flex items-center gap-1 rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-600 transition hover:bg-blue-100"
-              >
-                <Plus size={16} />
-                Agregar
-              </button>
-            </div>
-
-            {materialItems.length === 0 && (
-              <p className="text-sm text-gray-400">
-                Agrega materiales utilizados
-              </p>
-            )}
-
-            <div className="space-y-3">
-              {materialItems.map((item, i) => (
-                <div key={i} className="rounded-xl border bg-gray-50 p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="text-xs font-medium text-gray-500">
-                      Material #{i + 1}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeMaterialItem(i)}
-                      className="text-gray-400 hover:text-red-500"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                  <div className="space-y-2">
-                    <input
-                      type="text"
-                      value={item.description}
-                      onChange={(e) =>
-                        updateMaterialItem(i, "description", e.target.value)
-                      }
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                      placeholder="Descripción del material"
-                    />
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className="block text-xs text-gray-500">
-                          Unidad
-                        </label>
-                        <select
-                          value={item.unit}
-                          onChange={(e) =>
-                            updateMaterialItem(i, "unit", e.target.value)
-                          }
-                          className="w-full rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                        >
-                          <option value="pza">Pza</option>
-                          <option value="m">Metro</option>
-                          <option value="hr">Hora</option>
-                          <option value="glb">Global</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500">
-                          Cantidad
-                        </label>
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={item.quantity ?? ""}
-                          onChange={(e) =>
-                            updateMaterialItem(
-                              i,
-                              "quantity",
-                              e.target.value ? Number(e.target.value) : null
-                            )
-                          }
-                          className="w-full rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500">
-                          P. Unit. (Bs.)
-                        </label>
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={item.unit_price ?? ""}
-                          onChange={(e) =>
-                            updateMaterialItem(
-                              i,
-                              "unit_price",
-                              e.target.value ? Number(e.target.value) : null
-                            )
-                          }
-                          className="w-full rounded-lg border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                        />
-                      </div>
-                    </div>
-                    <div className="text-right text-sm font-medium text-gray-700">
-                      Total: Bs.{" "}
-                      {(
-                        (item.quantity || 0) * (item.unit_price || 0)
-                      ).toFixed(2)}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-3 border-t pt-3 text-right">
-              <span className="text-sm font-semibold text-gray-900">
-                Total Materiales: Bs. {totalMaterials.toFixed(2)}
-              </span>
-            </div>
-          </section>
-
-          {/* === TOTAL GLOBAL === */}
           <section className="rounded-2xl bg-blue-50 p-5 shadow-sm">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-gray-900">
@@ -659,7 +418,6 @@ export default function NewWorkOrderPage() {
             </div>
           </section>
 
-          {/* === OBSERVACIONES === */}
           <section className="rounded-2xl bg-white p-5 shadow-sm">
             <h2 className="mb-3 text-base font-semibold text-gray-900">
               Observaciones
@@ -673,7 +431,6 @@ export default function NewWorkOrderPage() {
             />
           </section>
 
-          {/* === RESPONSABLES === */}
           <section className="rounded-2xl bg-white p-5 shadow-sm">
             <h2 className="mb-4 text-base font-semibold text-gray-900">
               Responsables
@@ -707,12 +464,11 @@ export default function NewWorkOrderPage() {
           </section>
 
           {error && (
-            <div className="rounded-xl bg-red-50 p-4 text-sm text-red-700">
+            <div role="alert" className="rounded-xl bg-red-50 p-4 text-sm text-red-700">
               {error}
             </div>
           )}
 
-          {/* === BOTÓN GUARDAR (sticky bottom) === */}
           <div className="sticky bottom-0 -mx-4 border-t bg-white px-4 py-4 shadow-lg">
             <button
               type="submit"

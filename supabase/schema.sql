@@ -213,3 +213,66 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW
   EXECUTE FUNCTION handle_new_user();
+
+-- 10. RPC: transacción atómica para crear orden + ítems
+CREATE OR REPLACE FUNCTION create_work_order_transaction(
+  p_plumber_id UUID,
+  p_sheet_number INTEGER DEFAULT NULL,
+  p_location TEXT,
+  p_requested_by TEXT DEFAULT NULL,
+  p_received_by TEXT DEFAULT NULL,
+  p_request_date DATE DEFAULT NULL,
+  p_start_date DATE DEFAULT NULL,
+  p_end_date DATE DEFAULT NULL,
+  p_remit_number TEXT DEFAULT NULL,
+  p_description TEXT,
+  p_total_labor NUMERIC(10,2) DEFAULT 0,
+  p_total_materials NUMERIC(10,2) DEFAULT 0,
+  p_grand_total NUMERIC(10,2) DEFAULT 0,
+  p_observations TEXT DEFAULT NULL,
+  p_upds_responsible TEXT DEFAULT NULL,
+  p_ramper_responsible TEXT DEFAULT NULL,
+  p_status TEXT DEFAULT 'pending',
+  p_items JSONB DEFAULT '[]'::JSONB
+)
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_order_id UUID;
+  v_item JSONB;
+BEGIN
+  INSERT INTO work_orders (
+    plumber_id, sheet_number, location, requested_by, received_by,
+    request_date, start_date, end_date, remit_number, description,
+    total_labor, total_materials, grand_total, observations,
+    upds_responsible, ramper_responsible, status
+  ) VALUES (
+    p_plumber_id, p_sheet_number, p_location, p_requested_by, p_received_by,
+    p_request_date, p_start_date, p_end_date, p_remit_number, p_description,
+    p_total_labor, p_total_materials, p_grand_total, p_observations,
+    p_upds_responsible, p_ramper_responsible, p_status
+  )
+  RETURNING id INTO v_order_id;
+
+  IF jsonb_array_length(p_items) > 0 THEN
+    FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+    LOOP
+      INSERT INTO work_order_items (
+        work_order_id, item_type, description, unit, quantity, unit_price
+      ) VALUES (
+        v_order_id,
+        v_item ->> 'item_type',
+        v_item ->> 'description',
+        COALESCE(v_item ->> 'unit', 'pza'),
+        COALESCE((v_item ->> 'quantity')::NUMERIC(10,2), 0),
+        COALESCE((v_item ->> 'unit_price')::NUMERIC(10,2), 0)
+      );
+    END LOOP;
+  END IF;
+
+  RETURN v_order_id;
+END;
+$$;

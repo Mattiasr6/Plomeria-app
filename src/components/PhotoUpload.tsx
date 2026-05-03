@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useSupabase } from "@/components/SupabaseProvider";
 import { useState } from "react";
 import { Camera, X, Loader2 } from "lucide-react";
@@ -92,9 +93,11 @@ export function PhotoUpload({ photos, onChange }: Props) {
             const idx = photos.indexOf(photo);
             return (
               <div key={idx} className="relative h-24 w-24 overflow-hidden rounded-lg border">
-                <img
+                <Image
                   src={photo.preview}
-                  alt="Antes"
+                  alt="Vista previa foto antes"
+                  width={96}
+                  height={96}
                   className="h-full w-full object-cover"
                 />
                 <button
@@ -127,9 +130,11 @@ export function PhotoUpload({ photos, onChange }: Props) {
             const idx = photos.indexOf(photo);
             return (
               <div key={idx} className="relative h-24 w-24 overflow-hidden rounded-lg border">
-                <img
+                <Image
                   src={photo.preview}
-                  alt="Después"
+                  alt="Vista previa foto después"
+                  width={96}
+                  height={96}
                   className="h-full w-full object-cover"
                 />
                 <button

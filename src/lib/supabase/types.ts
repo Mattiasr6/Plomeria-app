@@ -4,18 +4,21 @@ type ProfileRow = {
   id: string;
   full_name: string;
   phone: string | null;
+  role: string;
   created_at: string;
 };
 type ProfileInsert = {
   id: string;
   full_name: string;
   phone?: string | null;
+  role?: string;
   created_at?: string;
 };
 type ProfileUpdate = {
   id?: string;
   full_name?: string;
   phone?: string | null;
+  role?: string;
   created_at?: string;
 };
 
@@ -138,6 +141,38 @@ type MaterialItemUpdate = {
   unit_price?: number | null;
 };
 
+type WorkOrderItemRow = {
+  id: string;
+  work_order_id: string;
+  item_type: string;
+  description: string;
+  unit: string | null;
+  quantity: number | null;
+  unit_price: number | null;
+  total: number | null;
+  created_at: string;
+};
+type WorkOrderItemInsert = {
+  id?: string;
+  work_order_id: string;
+  item_type: string;
+  description: string;
+  unit?: string | null;
+  quantity?: number | null;
+  unit_price?: number | null;
+  created_at?: string;
+};
+type WorkOrderItemUpdate = {
+  id?: string;
+  work_order_id?: string;
+  item_type?: string;
+  description?: string;
+  unit?: string | null;
+  quantity?: number | null;
+  unit_price?: number | null;
+  created_at?: string;
+};
+
 type PhotoRow = {
   id: string;
   work_order_id: string;
@@ -187,6 +222,12 @@ export interface Database {
         Update: MaterialItemUpdate;
         Relationships: [];
       };
+      work_order_items: {
+        Row: WorkOrderItemRow;
+        Insert: WorkOrderItemInsert;
+        Update: WorkOrderItemUpdate;
+        Relationships: [];
+      };
       work_order_photos: {
         Row: PhotoRow;
         Insert: PhotoInsert;
@@ -195,6 +236,30 @@ export interface Database {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      create_work_order_transaction: {
+        Args: {
+          p_plumber_id: string;
+          p_sheet_number?: number | null;
+          p_location: string;
+          p_requested_by?: string | null;
+          p_received_by?: string | null;
+          p_request_date?: string | null;
+          p_start_date?: string | null;
+          p_end_date?: string | null;
+          p_remit_number?: string | null;
+          p_description: string;
+          p_total_labor?: number;
+          p_total_materials?: number;
+          p_grand_total?: number;
+          p_observations?: string | null;
+          p_upds_responsible?: string | null;
+          p_ramper_responsible?: string | null;
+          p_status?: string;
+          p_items?: Json;
+        };
+        Returns: string;
+      };
+    };
   };
 }

@@ -1,7 +1,6 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
+import Image from "next/image";
 import { AuthGuard } from "@/components/AuthGuard";
 import { createClient } from "@/lib/supabase/client";
 import { useParams, useRouter } from "next/navigation";
@@ -17,6 +16,7 @@ import {
   User,
   Building2,
 } from "lucide-react";
+import { StatusBadge } from "@/components/StatusBadge";
 
 interface WorkOrder {
   id: string;
@@ -137,11 +137,6 @@ export default function WorkOrderDetailPage() {
     in_progress: "En progreso",
     completed: "Completado",
   };
-  const statusColors: Record<string, string> = {
-    pending: "bg-yellow-100 text-yellow-800",
-    in_progress: "bg-blue-100 text-blue-800",
-    completed: "bg-green-100 text-green-800",
-  };
 
   return (
     <AuthGuard>
@@ -164,11 +159,7 @@ export default function WorkOrderDetailPage() {
         <main className="mx-auto max-w-2xl space-y-4 px-4 py-6 pb-24">
           {/* Status */}
           <div className="flex items-center justify-between">
-            <span
-              className={`inline-block rounded-full px-3 py-1 text-xs font-medium ${statusColors[order.status]}`}
-            >
-              {statusLabels[order.status] || order.status}
-            </span>
+            <StatusBadge status={order.status} />
             {order.sheet_number && (
               <span className="text-sm text-gray-400">
                 Planilla #{order.sheet_number}
@@ -281,9 +272,11 @@ export default function WorkOrderDetailPage() {
                         rel="noopener noreferrer"
                         className="block h-24 w-24 overflow-hidden rounded-lg border"
                       >
-                        <img
+                        <Image
                           src={photo.url}
-                          alt="Antes"
+                          alt={`Foto antes del trabajo - ${order.location}`}
+                          width={96}
+                          height={96}
                           className="h-full w-full object-cover"
                         />
                       </a>
@@ -303,9 +296,11 @@ export default function WorkOrderDetailPage() {
                         rel="noopener noreferrer"
                         className="block h-24 w-24 overflow-hidden rounded-lg border"
                       >
-                        <img
+                        <Image
                           src={photo.url}
-                          alt="Después"
+                          alt={`Foto después del trabajo - ${order.location}`}
+                          width={96}
+                          height={96}
                           className="h-full w-full object-cover"
                         />
                       </a>
