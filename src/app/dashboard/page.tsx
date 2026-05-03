@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Plus, LogOut, Wrench, FileText } from "lucide-react";
+import { Plus, LogOut, Wrench, FileText, Shield } from "lucide-react";
 import { cacheLife, cacheTag } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -20,9 +20,11 @@ export default async function DashboardPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name")
+    .select("full_name, role")
     .eq("id", user.id)
     .single();
+
+  const isAdmin = profile?.role === "admin";
 
   const { data: { session } } = await supabase.auth.getSession();
   const accessToken = session?.access_token ?? "";
@@ -36,6 +38,15 @@ export default async function DashboardPage() {
             <h1 className="text-lg font-bold text-gray-900">Plomería</h1>
           </div>
           <div className="flex items-center gap-3">
+            {isAdmin && (
+              <Link
+                href="/admin"
+                className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-blue-700"
+              >
+                <Shield size={16} />
+                Panel Admin
+              </Link>
+            )}
             <span className="text-sm text-gray-500">
               {profile?.full_name || user.email}
             </span>

@@ -1,7 +1,9 @@
 "use client";
 
 import { Plus, Trash2 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import type { ComponentType } from "react";
+
+type LucideIcon = ComponentType<{ size?: number; className?: string }>;
 
 interface Item {
   description: string;

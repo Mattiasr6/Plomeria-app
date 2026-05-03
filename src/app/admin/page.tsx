@@ -1,7 +1,16 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Shield, LogOut, Wrench, FileText, Plus, User } from "lucide-react";
+import {
+  Shield,
+  LogOut,
+  FileText,
+  Plus,
+  User,
+  Eye,
+  Download,
+  LayoutDashboard,
+} from "lucide-react";
 import { cacheLife, cacheTag } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -11,6 +20,10 @@ import { StatusBadge } from "@/components/StatusBadge";
 import type { Database } from "@/lib/supabase/types";
 
 type WorkOrder = Database["public"]["Tables"]["work_orders"]["Row"];
+
+type OrderWithProfile = WorkOrder & {
+  profile: { full_name: string } | null;
+};
 
 export default async function AdminPage() {
   const supabase = await createServerSupabaseClient();
@@ -32,7 +45,7 @@ export default async function AdminPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="sticky top-0 z-10 border-b bg-white shadow-sm">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
             <Shield className="text-indigo-600" size={24} />
             <h1 className="text-lg font-bold text-gray-900">
@@ -40,6 +53,13 @@ export default async function AdminPage() {
             </h1>
           </div>
           <div className="flex items-center gap-3">
+            <Link
+              href="/dashboard"
+              className="flex items-center gap-1.5 rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-200"
+            >
+              <LayoutDashboard size={16} />
+              Mi Dashboard
+            </Link>
             <span className="text-sm text-gray-500">
               {profile?.full_name || user.email}
             </span>
@@ -55,7 +75,7 @@ export default async function AdminPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-4 py-6">
+      <main className="mx-auto max-w-6xl px-4 py-6">
         <div className="mb-6 flex items-center justify-between">
           <h2 className="text-xl font-semibold text-gray-900">
             Todas las Órdenes de Trabajo
@@ -111,53 +131,110 @@ async function AdminOrderList({ accessToken }: { accessToken: string }) {
     );
   }
 
-  type OrderWithProfile = WorkOrder & {
-    profile: { full_name: string } | null;
-  };
+  const items = orders as unknown as OrderWithProfile[];
 
   return (
-    <ul className="space-y-3">
-      {(orders as unknown as OrderWithProfile[]).map((order) => (
-        <li key={order.id}>
-          <Link
-            href={`/work-orders/${order.id}`}
-            className="block rounded-2xl border bg-white p-4 shadow-sm transition hover:shadow-md"
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <h3 className="truncate font-medium text-gray-900">
-                  {order.location}
-                </h3>
-                <p className="mt-1 line-clamp-1 text-sm text-gray-500">
-                  {order.description}
-                </p>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <StatusBadge status={order.status} />
-                  {order.sheet_number && (
-                    <span className="text-xs text-gray-400">
-                      Planilla #{order.sheet_number}
-                    </span>
-                  )}
-                  {order.profile?.full_name && (
-                    <span className="inline-flex items-center gap-1 text-xs text-gray-400">
-                      <User size={12} />
-                      {order.profile.full_name}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-lg font-bold text-gray-900">
-                  Bs. {order.grand_total.toFixed(2)}
-                </p>
-                <p className="mt-1 text-xs text-gray-400">
+    <>
+      <div className="mb-4 flex items-center gap-2">
+        <span className="rounded-full bg-indigo-100 px-3 py-1 text-sm font-medium text-indigo-700">
+          {items.length} órdenes
+        </span>
+      </div>
+
+      {/* Desktop table */}
+      <div className="hidden overflow-hidden rounded-2xl border bg-white shadow-sm md:block">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b bg-gray-50 text-xs font-semibold uppercase tracking-wider text-gray-500">
+              <th className="px-5 py-3">Fecha</th>
+              <th className="px-5 py-3">Trabajador</th>
+              <th className="px-5 py-3">Ubicación</th>
+              <th className="px-5 py-3">Estado</th>
+              <th className="px-5 py-3">Total</th>
+              <th className="px-5 py-3" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {items.map((order) => (
+              <tr key={order.id} className="transition hover:bg-gray-50">
+                <td className="whitespace-nowrap px-5 py-4 text-gray-500">
                   {new Date(order.created_at).toLocaleDateString("es-BO")}
-                </p>
-              </div>
+                </td>
+                <td className="px-5 py-4 font-medium text-gray-900">
+                  {order.profile?.full_name || "—"}
+                </td>
+                <td className="max-w-xs truncate px-5 py-4 text-gray-600">
+                  {order.location}
+                </td>
+                <td className="px-5 py-4">
+                  <StatusBadge status={order.status} />
+                </td>
+                <td className="px-5 py-4 font-medium text-gray-900">
+                  Bs. {order.grand_total.toFixed(2)}
+                </td>
+                <td className="whitespace-nowrap px-5 py-4 text-right">
+                  <Link
+                    href={`/work-orders/${order.id}`}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700"
+                  >
+                    <Eye size={14} />
+                    Ver
+                  </Link>
+                  <a
+                    href={`/api/export/${order.id}`}
+                    className="ml-2 inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-green-700"
+                  >
+                    <Download size={14} />
+                    Excel
+                  </a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile cards */}
+      <div className="space-y-3 md:hidden">
+        {items.map((order) => (
+          <div
+            key={order.id}
+            className="rounded-2xl border bg-white p-4 shadow-sm"
+          >
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs text-gray-400">
+                {new Date(order.created_at).toLocaleDateString("es-BO")}
+              </span>
+              <StatusBadge status={order.status} />
             </div>
-          </Link>
-        </li>
-      ))}
-    </ul>
+            <p className="text-sm font-medium text-gray-900">
+              {order.profile?.full_name || "—"}
+            </p>
+            <p className="mt-1 line-clamp-2 text-sm text-gray-500">
+              {order.location}
+            </p>
+            <p className="mt-1 text-sm font-semibold text-gray-900">
+              Bs. {order.grand_total.toFixed(2)}
+            </p>
+            <div className="mt-3 flex gap-2">
+              <Link
+                href={`/work-orders/${order.id}`}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
+              >
+                <Eye size={14} />
+                Ver
+              </Link>
+              <a
+                href={`/api/export/${order.id}`}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-green-700"
+              >
+                <Download size={14} />
+                Excel
+              </a>
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }

@@ -40,7 +40,17 @@ export function AuthForm() {
           password,
         });
         if (signInError) throw signInError;
-        router.push("/dashboard");
+
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .single();
+
+        if (profile?.role === "admin") {
+          router.push("/admin");
+        } else {
+          router.push("/dashboard");
+        }
         router.refresh();
       }
     } catch (err) {
