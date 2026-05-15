@@ -16,13 +16,21 @@ export default async function DashboardPage() {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) redirect("/auth/login");
+  useEffect(() => {
+    supabase.auth.getUser().then((response) => {
+      const user = response.data.user;
+      if (!user) return;
+      setUserName(user.user_metadata?.full_name || user.email || "");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name, role")
-    .eq("id", user.id)
-    .single();
+      supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single()
+        .then(({ data }) => {
+          if (data?.role === "admin") setIsAdmin(true);
+        });
+    });
 
   const isAdmin = profile?.role === "admin";
 

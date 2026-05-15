@@ -89,7 +89,7 @@ type WorkOrderUpdate = {
   updated_at?: string;
 };
 
-type LaborItemRow = {
+type WorkItemRow = {
   id: string;
   work_order_id: string;
   description: string;
@@ -97,48 +97,25 @@ type LaborItemRow = {
   quantity: number | null;
   unit_price: number | null;
   total: number | null;
+  item_type: "labor" | "material";
 };
-type LaborItemInsert = {
+type WorkItemInsert = {
   id?: string;
   work_order_id: string;
   description: string;
   unit?: string | null;
   quantity?: number | null;
   unit_price?: number | null;
+  item_type: "labor" | "material";
 };
-type LaborItemUpdate = {
+type WorkItemUpdate = {
   id?: string;
   work_order_id?: string;
   description?: string;
   unit?: string | null;
   quantity?: number | null;
   unit_price?: number | null;
-};
-
-type MaterialItemRow = {
-  id: string;
-  work_order_id: string;
-  description: string;
-  unit: string | null;
-  quantity: number | null;
-  unit_price: number | null;
-  total: number | null;
-};
-type MaterialItemInsert = {
-  id?: string;
-  work_order_id: string;
-  description: string;
-  unit?: string | null;
-  quantity?: number | null;
-  unit_price?: number | null;
-};
-type MaterialItemUpdate = {
-  id?: string;
-  work_order_id?: string;
-  description?: string;
-  unit?: string | null;
-  quantity?: number | null;
-  unit_price?: number | null;
+  item_type?: "labor" | "material";
 };
 
 type WorkOrderItemRow = {
@@ -210,16 +187,10 @@ export interface Database {
         Update: WorkOrderUpdate;
         Relationships: [];
       };
-      work_order_labor_items: {
-        Row: LaborItemRow;
-        Insert: LaborItemInsert;
-        Update: LaborItemUpdate;
-        Relationships: [];
-      };
-      work_order_material_items: {
-        Row: MaterialItemRow;
-        Insert: MaterialItemInsert;
-        Update: MaterialItemUpdate;
+      work_order_items: {
+        Row: WorkItemRow;
+        Insert: WorkItemInsert;
+        Update: WorkItemUpdate;
         Relationships: [];
       };
       work_order_items: {

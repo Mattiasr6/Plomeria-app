@@ -1,16 +1,19 @@
 declare module "lucide-react" {
   import type { FC, SVGAttributes } from "react";
+
   interface LucideProps extends SVGAttributes<SVGSVGElement> {
-    size?: number;
-    color?: string;
-    strokeWidth?: number;
+    size?: string | number;
+    absoluteStrokeWidth?: boolean;
   }
+
   type Icon = FC<LucideProps>;
+
   export const ArrowLeft: Icon;
   export const Building2: Icon;
   export const Calendar: Icon;
   export const Camera: Icon;
   export const Download: Icon;
+  export const Edit3: Icon;
   export const Eye: Icon;
   export const FileText: Icon;
   export const Hammer: Icon;

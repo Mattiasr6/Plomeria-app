@@ -13,22 +13,7 @@ import {
   Loader2,
   Wrench,
   Camera,
-  Hammer,
 } from "lucide-react";
-
-interface LaborItem {
-  description: string;
-  unit: string;
-  quantity: number | null;
-  unit_price: number | null;
-}
-
-interface MaterialItem {
-  description: string;
-  unit: string;
-  quantity: number | null;
-  unit_price: number | null;
-}
 
 interface Photo {
   file: File;
@@ -58,8 +43,7 @@ export default function NewWorkOrderPage() {
 
   const [saving, setSaving] = useState(false);
   const [photos, setPhotos] = useState<Photo[]>([]);
-  const [laborItems, setLaborItems] = useState<LaborItem[]>([defaultLaborItem]);
-  const [materialItems, setMaterialItems] = useState<MaterialItem[]>([]);
+
   const [error, setError] = useState("");
 
   const [location, setLocation] = useState("");
@@ -75,39 +59,6 @@ export default function NewWorkOrderPage() {
   const [updsResponsible, setUpdsResponsible] = useState("");
   const [ramperResponsible, setRamperResponsible] = useState("");
 
-  const totalLabor = laborItems.reduce(
-    (sum, item) => sum + (item.quantity || 0) * (item.unit_price || 0),
-    0
-  );
-  const totalMaterials = materialItems.reduce(
-    (sum, item) => sum + (item.quantity || 0) * (item.unit_price || 0),
-    0
-  );
-  const grandTotal = totalLabor + totalMaterials;
-
-  function handleLaborUpdate(
-    index: number,
-    field: keyof LaborItem,
-    value: string | number | null
-  ) {
-    setLaborItems((prev) => {
-      const next = [...prev];
-      next[index] = { ...next[index], [field]: value };
-      return next;
-    });
-  }
-
-  function handleMaterialUpdate(
-    index: number,
-    field: keyof MaterialItem,
-    value: string | number | null
-  ) {
-    setMaterialItems((prev) => {
-      const next = [...prev];
-      next[index] = { ...next[index], [field]: value };
-      return next;
-    });
-  }
 
   async function uploadPhotos(): Promise<string[]> {
     const urls: string[] = [];
@@ -144,31 +95,9 @@ export default function NewWorkOrderPage() {
       } = await supabase.auth.getUser();
       if (!user) throw new Error("No autenticado");
 
-      const allItems = [
-        ...laborItems
-          .filter((item) => item.description.trim())
-          .map((item) => ({
-            item_type: "labor",
-            description: item.description,
-            unit: item.unit || "pza",
-            quantity: item.quantity || 0,
-            unit_price: item.unit_price || 0,
-          })),
-        ...materialItems
-          .filter((item) => item.description.trim())
-          .map((item) => ({
-            item_type: "material",
-            description: item.description,
-            unit: item.unit || "pza",
-            quantity: item.quantity || 0,
-            unit_price: item.unit_price || 0,
-          })),
-      ];
-
-      const { data: orderId, error: rpcError } = await supabase.rpc(
+      const { data: order, error: rpcError } = await supabase.rpc(
         "create_work_order_transaction",
         {
-          p_plumber_id: user.id,
           p_sheet_number: sheetNumber,
           p_location: location,
           p_requested_by: requestedBy || null,
@@ -178,19 +107,19 @@ export default function NewWorkOrderPage() {
           p_end_date: endDate || null,
           p_remit_number: remitNumber || null,
           p_description: description,
-          p_total_labor: totalLabor,
-          p_total_materials: totalMaterials,
-          p_grand_total: grandTotal,
           p_observations: observations || null,
           p_upds_responsible: updsResponsible || null,
           p_ramper_responsible: ramperResponsible || null,
+          p_total_labor: 0,
+          p_total_materials: 0,
+          p_grand_total: 0,
+          p_items: [],
           p_status: "pending",
-          p_items: allItems,
         }
       );
 
       if (rpcError) throw rpcError;
-
+      const orderId = order?.id || order;
       if (photos.length > 0) {
         const photoUrls = await uploadPhotos();
         const { error: photoError } = await supabase
@@ -205,7 +134,7 @@ export default function NewWorkOrderPage() {
         if (photoError) throw photoError;
       }
 
-      await revalidateAll();
+
       router.push(`/work-orders/${orderId}`);
     } catch (err) {
       setError(
@@ -371,53 +300,7 @@ export default function NewWorkOrderPage() {
             <PhotoUpload photos={photos} onChange={setPhotos} />
           </section>
 
-          <ItemsSection
-            title="Mano de Obra"
-            icon={Hammer}
-            items={laborItems}
-            onAdd={() =>
-              setLaborItems((prev) => [...prev, defaultLaborItem])
-            }
-            onRemove={(i) =>
-              setLaborItems((prev) => prev.filter((_, idx) => idx !== i))
-            }
-            onUpdate={handleLaborUpdate}
-            total={totalLabor}
-            emptyMessage="Agrega items de mano de obra"
-            descriptionPlaceholder="Descripción (ej: limpieza de sifón)"
-          />
-
-          <ItemsSection
-            title="Materiales"
-            icon={Wrench}
-            items={materialItems}
-            onAdd={() =>
-              setMaterialItems((prev) => [...prev, defaultMaterialItem])
-            }
-            onRemove={(i) =>
-              setMaterialItems((prev) => prev.filter((_, idx) => idx !== i))
-            }
-            onUpdate={handleMaterialUpdate}
-            total={totalMaterials}
-            emptyMessage="Agrega materiales utilizados"
-            descriptionPlaceholder="Descripción del material"
-          />
-
-          <section className="rounded-2xl bg-blue-50 p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-gray-900">
-                Total Global
-              </h2>
-              <p className="text-2xl font-bold text-blue-700">
-                Bs. {grandTotal.toFixed(2)}
-              </p>
-            </div>
-            <div className="mt-2 flex justify-between text-sm text-gray-500">
-              <span>Mano de obra: Bs. {totalLabor.toFixed(2)}</span>
-              <span>Materiales: Bs. {totalMaterials.toFixed(2)}</span>
-            </div>
-          </section>
-
+          {/* === OBSERVACIONES === */}
           <section className="rounded-2xl bg-white p-5 shadow-sm">
             <h2 className="mb-3 text-base font-semibold text-gray-900">
               Observaciones
