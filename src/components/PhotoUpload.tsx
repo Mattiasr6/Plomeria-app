@@ -54,7 +54,7 @@ export function PhotoUpload({ photos, onChange }: Props) {
           .filter((p) => !p.uploaded)
           .map(async (photo) => {
             const ext = photo.file.name.split(".").pop() || "jpg";
-            const fileName = `${crypto.randomUUID()}.${ext}`;
+            const fileName = `${Math.random().toString(36).substring(2, 15) + Date.now().toString(36)}.${ext}`;
             const filePath = `${photo.type === "before" ? "antes" : "despues"}/${fileName}`;
 
             const { error: uploadError } = await supabase.storage

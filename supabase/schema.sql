@@ -1,6 +1,6 @@
 -- ============================================================
 -- Esquema de Base de Datos — Plomería
--- Basado en el análisis de "PLANILLA DE TRABAJOS DE MANTENIMIENTO"
+-- Sincronizado con DB real (generado vía Supabase MCP)
 -- ============================================================
 
 -- 1. EXTENSIÓN DE UUID
@@ -11,6 +11,7 @@ CREATE TABLE profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   full_name TEXT NOT NULL,
   phone TEXT,
+  role TEXT DEFAULT 'worker' CHECK (role IN ('worker', 'admin')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -132,7 +133,39 @@ CREATE POLICY "Material: eliminación según orden"
     SELECT 1 FROM work_orders WHERE id = work_order_id AND plumber_id = auth.uid()
   ));
 
--- 6. FOTOS (antes / después)
+-- 6. ITEMS UNIFICADOS (usado por RPC create_work_order_transaction)
+CREATE TABLE work_order_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  work_order_id UUID NOT NULL REFERENCES work_orders(id) ON DELETE CASCADE,
+  item_type TEXT NOT NULL CHECK (item_type IN ('labor', 'material')),
+  description TEXT NOT NULL,
+  unit TEXT DEFAULT 'pza',
+  quantity NUMERIC(10,2) DEFAULT 0,
+  unit_price NUMERIC(10,2) DEFAULT 0,
+  total NUMERIC(10,2) GENERATED ALWAYS AS (COALESCE(quantity,0) * COALESCE(unit_price,0)) STORED
+);
+
+ALTER TABLE work_order_items ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Items unificados: lectura según orden"
+  ON work_order_items FOR SELECT
+  USING (EXISTS (
+    SELECT 1 FROM work_orders WHERE id = work_order_id AND plumber_id = auth.uid()
+  ));
+
+CREATE POLICY "Items unificados: inserción según orden"
+  ON work_order_items FOR INSERT
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM work_orders WHERE id = work_order_id AND plumber_id = auth.uid()
+  ));
+
+CREATE POLICY "Items unificados: eliminación según orden"
+  ON work_order_items FOR DELETE
+  USING (EXISTS (
+    SELECT 1 FROM work_orders WHERE id = work_order_id AND plumber_id = auth.uid()
+  ));
+
+-- 7. FOTOS (antes / después)
 CREATE TABLE work_order_photos (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   work_order_id UUID NOT NULL REFERENCES work_orders(id) ON DELETE CASCADE,
@@ -161,27 +194,15 @@ CREATE POLICY "Fotos: eliminación según orden"
     SELECT 1 FROM work_orders WHERE id = work_order_id AND plumber_id = auth.uid()
   ));
 
--- 7. BUCKET DE STORAGE para fotos (ejecutar en SQL Editor de Supabase)
--- NOTA: Crear bucket "work-photos" desde el dashboard de Supabase Storage
--- y configurar política pública de lectura / inserción autenticada.
+-- 8. BUCKET DE STORAGE para fotos
+-- Creado desde dashboard Supabase. Bucket: "work-photos" (público)
+-- Policies:
+--   SELECT: bucket_id = 'work-photos'
+--   INSERT: bucket_id = 'work-photos' AND auth.role() = 'authenticated'
+--   UPDATE: bucket_id = 'work-photos' AND auth.role() = 'authenticated'
+--   DELETE: bucket_id = 'work-photos' AND auth.role() = 'authenticated'
 
--- Política para el bucket (ejecutar en SQL Editor):
-/*
-INSERT INTO storage.buckets (id, name, public) VALUES ('work-photos', 'work-photos', true);
-
-CREATE POLICY "Fotos: lectura pública"
-  ON storage.objects FOR SELECT
-  USING (bucket_id = 'work-photos');
-
-CREATE POLICY "Fotos: subida autenticada"
-  ON storage.objects FOR INSERT
-  WITH CHECK (
-    bucket_id = 'work-photos'
-    AND auth.role() = 'authenticated'
-  );
-*/
-
--- 8. TRIGGER: actualizar updated_at en work_orders
+-- 9. TRIGGER: actualizar updated_at en work_orders
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -195,7 +216,7 @@ CREATE TRIGGER set_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
 
--- 9. TRIGGER: crear perfil automáticamente al registrarse
+-- 10. TRIGGER: crear perfil automáticamente al registrarse
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -214,18 +235,18 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW
   EXECUTE FUNCTION handle_new_user();
 
--- 10. RPC: transacción atómica para crear orden + ítems
+-- 11. RPC: transacción atómica para crear orden + ítems
 CREATE OR REPLACE FUNCTION create_work_order_transaction(
   p_plumber_id UUID,
-  p_sheet_number INTEGER DEFAULT NULL,
   p_location TEXT,
+  p_description TEXT,
+  p_sheet_number INTEGER DEFAULT NULL,
   p_requested_by TEXT DEFAULT NULL,
   p_received_by TEXT DEFAULT NULL,
   p_request_date DATE DEFAULT NULL,
   p_start_date DATE DEFAULT NULL,
   p_end_date DATE DEFAULT NULL,
   p_remit_number TEXT DEFAULT NULL,
-  p_description TEXT,
   p_total_labor NUMERIC(10,2) DEFAULT 0,
   p_total_materials NUMERIC(10,2) DEFAULT 0,
   p_grand_total NUMERIC(10,2) DEFAULT 0,
@@ -276,3 +297,6 @@ BEGIN
   RETURN v_order_id;
 END;
 $$;
+
+REVOKE EXECUTE ON FUNCTION create_work_order_transaction FROM anon;
+GRANT EXECUTE ON FUNCTION create_work_order_transaction TO authenticated;

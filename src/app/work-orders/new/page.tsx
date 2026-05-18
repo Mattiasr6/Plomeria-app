@@ -2,6 +2,7 @@
 
 import { AuthGuard } from "@/components/AuthGuard";
 import { PhotoUpload } from "@/components/PhotoUpload";
+import { DatePicker } from "@/components/DatePicker";
 import { ItemsSection } from "@/components/ItemsSection";
 import { useSupabase } from "@/components/SupabaseProvider";
 import { useRouter } from "next/navigation";
@@ -22,20 +23,6 @@ interface Photo {
   uploaded: boolean;
   url?: string;
 }
-
-const defaultLaborItem: LaborItem = {
-  description: "",
-  unit: "pza",
-  quantity: null,
-  unit_price: null,
-};
-
-const defaultMaterialItem: MaterialItem = {
-  description: "",
-  unit: "pza",
-  quantity: null,
-  unit_price: null,
-};
 
 export default function NewWorkOrderPage() {
   const router = useRouter();
@@ -64,7 +51,7 @@ export default function NewWorkOrderPage() {
     const urls: string[] = [];
     for (const photo of photos) {
       const ext = photo.file.name.split(".").pop() || "jpg";
-      const fileName = `${crypto.randomUUID()}.${ext}`;
+      const fileName = `${Math.random().toString(36).substring(2, 15) + Date.now().toString(36)}.${ext}`;
       const filePath = `${photo.type === "before" ? "antes" : "despues"}/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
@@ -95,31 +82,32 @@ export default function NewWorkOrderPage() {
       } = await supabase.auth.getUser();
       if (!user) throw new Error("No autenticado");
 
-      const { data: order, error: rpcError } = await supabase.rpc(
-        "create_work_order_transaction",
-        {
-          p_sheet_number: sheetNumber,
-          p_location: location,
-          p_requested_by: requestedBy || null,
-          p_received_by: receivedBy || null,
-          p_request_date: requestDate || null,
-          p_start_date: startDate || null,
-          p_end_date: endDate || null,
-          p_remit_number: remitNumber || null,
-          p_description: description,
-          p_observations: observations || null,
-          p_upds_responsible: updsResponsible || null,
-          p_ramper_responsible: ramperResponsible || null,
-          p_total_labor: 0,
-          p_total_materials: 0,
-          p_grand_total: 0,
-          p_items: [],
-          p_status: "pending",
-        }
-      );
+      const { data: order, error: orderError } = await supabase
+        .from("work_orders")
+        .insert({
+          plumber_id: user.id,
+          sheet_number: sheetNumber,
+          location,
+          requested_by: requestedBy || null,
+          received_by: receivedBy || null,
+          request_date: requestDate || null,
+          start_date: startDate || null,
+          end_date: endDate || null,
+          remit_number: remitNumber || null,
+          description,
+          observations: observations || null,
+          upds_responsible: updsResponsible || null,
+          ramper_responsible: ramperResponsible || null,
+          total_labor: 0,
+          total_materials: 0,
+          grand_total: 0,
+          status: "pending",
+        })
+        .select("id")
+        .single();
 
-      if (rpcError) throw rpcError;
-      const orderId = order?.id || order;
+      if (orderError) throw orderError;
+      const orderId = order.id;
       if (photos.length > 0) {
         const photoUrls = await uploadPhotos();
         const { error: photoError } = await supabase
@@ -227,41 +215,21 @@ export default function NewWorkOrderPage() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Fecha solicitud
-                  </label>
-                  <input
-                    type="date"
-                    value={requestDate}
-                    onChange={(e) => setRequestDate(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Fecha inicio
-                  </label>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Fecha fin
-                  </label>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
-              </div>
+              <DatePicker
+                label="Fecha solicitud"
+                value={requestDate}
+                onChange={setRequestDate}
+              />
+              <DatePicker
+                label="Fecha inicio"
+                value={startDate}
+                onChange={setStartDate}
+              />
+              <DatePicker
+                label="Fecha fin"
+                value={endDate}
+                onChange={setEndDate}
+              />
               <div>
                 <label className="block text-sm font-medium text-gray-700">
                   N° de Remito

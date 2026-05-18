@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
+const nextConfig = {
   cacheComponents: true,
+  server: {
+    allowedHosts: ["100.107.236.28", "localhost", "0.0.0.0"],
+  },
   images: {
     remotePatterns: [
       {

@@ -193,12 +193,6 @@ export interface Database {
         Update: WorkItemUpdate;
         Relationships: [];
       };
-      work_order_items: {
-        Row: WorkOrderItemRow;
-        Insert: WorkOrderItemInsert;
-        Update: WorkOrderItemUpdate;
-        Relationships: [];
-      };
       work_order_photos: {
         Row: PhotoRow;
         Insert: PhotoInsert;

@@ -3,7 +3,7 @@
 import { useSupabase } from "@/components/SupabaseProvider";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { LogIn, UserPlus } from "lucide-react";
+import { LogIn, UserPlus, Wrench } from "lucide-react";
 
 type Mode = "login" | "register";
 
@@ -63,9 +63,18 @@ export function AuthForm() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
       <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-lg">
-        <h1 className="mb-2 text-2xl font-bold text-gray-900">
+        {/* Branding */}
+        <div className="mb-6 text-center">
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-blue-100">
+            <Wrench className="text-blue-600" size={28} />
+          </div>
+          <h1 className="text-xl font-bold text-gray-900">Plomería</h1>
+          <p className="text-sm text-gray-500">Sistema de Órdenes de Trabajo</p>
+        </div>
+
+        <h2 className="mb-2 text-lg font-bold text-gray-900">
           {mode === "login" ? "Iniciar Sesión" : "Registrarse"}
-        </h1>
+        </h2>
         <p className="mb-6 text-sm text-gray-500">
           {mode === "login"
             ? "Accede a tus órdenes de trabajo"
@@ -151,6 +160,32 @@ export function AuthForm() {
             {mode === "login" ? "Entrar" : "Crear cuenta"}
           </button>
         </form>
+
+        {mode === "login" && (
+          <div className="mt-4 text-center">
+            <button
+              type="button"
+              onClick={async () => {
+                if (!email) {
+                  setError("Ingresa tu correo electrónico primero");
+                  return;
+                }
+                setError("");
+                const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+                  redirectTo: `${window.location.origin}/auth/login`,
+                });
+                if (resetError) {
+                  setError(resetError.message);
+                } else {
+                  setError("Correo de recuperación enviado. Revisa tu bandeja de entrada.");
+                }
+              }}
+              className="text-sm text-gray-500 hover:text-blue-600 hover:underline bg-transparent border-none cursor-pointer"
+            >
+              ¿Olvidaste tu contraseña?
+            </button>
+          </div>
+        )}
 
         <div className="mt-6 text-center text-sm text-gray-500">
           {mode === "login" ? (
